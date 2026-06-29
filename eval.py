@@ -76,21 +76,44 @@ def load_policy(ckpt_path: str, device: torch.device, use_ema: bool = True) -> t
 
 
 # --------------------------------------------------------------------------- #
+# Task configuration
+# --------------------------------------------------------------------------- #
+
+# robomimic task name -> robosuite env name
+TASK_ENV_MAP = {
+    "Lift":   "Lift",
+    "Can":    "PickPlaceCan",
+    "Square": "NutAssemblySquare",
+}
+
+# robosuite 1.4→1.5 object-state sign fix (Lift only).
+#
+# robomimic v141 Lift dataset: dims 7-9 of `object` = eef_pos - cube_pos.
+# robosuite 1.5 Lift: dims 7-9 of `object-state` = cube_pos - eef_pos (sign flipped).
+# Fix: negate dims 7-9 when processing Lift's 10-dim object-state.
+#
+# Can (14-dim) and Square (14-dim) have a different structure — the last dims
+# are object/target orientation vectors, NOT gripper-relative positions — so
+# no sign fix is needed or applied for those tasks.
+#
+# object-state dim counts per robomimic PH low-dim:
+#   Lift   : 10  (cube_pos 3 + cube_quat 4 + gripper_to_cube 3) <- sign fix here
+#   Can    : 14  (can_pos 3 + can_quat 4 + bin_pos 3 + bin_quat 4)
+#   Square : 14  (nut_pos 3 + nut_quat 4 + rod_pos 3 + rod_quat 4)
+LIFT_OBJECT_STATE_DIM = 10
+LIFT_REL_POS_SLICE    = slice(7, 10)
+
+
+# --------------------------------------------------------------------------- #
 # Environment
 # --------------------------------------------------------------------------- #
 def make_env(task: str, seed: int = 0, render_offscreen: bool = False):
-    """Create a robosuite environment matching the training data setup."""
-    try:
-        import robosuite as suite
-    except ImportError:
-        raise ImportError(
-            "robosuite is not installed.\n"
-            "Install with:  pip install robosuite\n"
-            "See M0 setup in the roadmap."
-        )
+    """Create a robosuite environment for the given robomimic task name."""
+    import robosuite as suite
 
+    env_name = TASK_ENV_MAP.get(task, task)
     env = suite.make(
-        env_name              = task,
+        env_name              = env_name,
         robots                = "Panda",
         has_renderer          = False,
         has_offscreen_renderer= render_offscreen,
@@ -111,12 +134,10 @@ def make_env(task: str, seed: int = 0, render_offscreen: bool = False):
 def extract_obs(env_obs: dict, obs_keys: tuple) -> np.ndarray:
     """Concatenate observation keys from a robosuite obs dict.
 
-    robosuite uses "object-state" for the concatenated object observations;
-    robomimic stores this under the key "object" in the HDF5. We map here.
-
-    Version mismatch fix: robomimic v141 (collected with robosuite 1.4.1) stores
-    dims 7-9 of `object` as `eef_pos - cube_pos`, but robosuite 1.5 returns
-    `cube_pos - eef_pos` in `object-state`. Negate dims 7-9 to match training.
+    Applies a robosuite 1.4→1.5 sign fix for Lift only: dims 7-9 of the 10-dim
+    object-state are a gripper-relative position that flipped sign between
+    versions. Can/Square use a different structure with no gripper-relative dims,
+    so no fix is applied for those tasks.
     """
     KEY_MAP = {"object": "object-state"}
     parts = []
@@ -128,9 +149,9 @@ def extract_obs(env_obs: dict, obs_keys: tuple) -> np.ndarray:
                 f"Available keys: {list(env_obs.keys())}"
             )
         val = env_obs[env_key].flatten().astype(np.float32)
-        if env_key == "object-state" and val.shape[0] == 10:
+        if env_key == "object-state" and val.shape[0] == LIFT_OBJECT_STATE_DIM:
             val = val.copy()
-            val[7:10] = -val[7:10]
+            val[LIFT_REL_POS_SLICE] = -val[LIFT_REL_POS_SLICE]
         parts.append(val)
     return np.concatenate(parts)
 
