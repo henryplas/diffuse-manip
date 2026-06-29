@@ -135,7 +135,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--batch-size",   type=int,   default=256)
     p.add_argument("--lr",           type=float, default=1e-4)
     p.add_argument("--weight-decay", type=float, default=1e-6)
-    p.add_argument("--ema-decay",    type=float, default=0.9999)
+    p.add_argument("--ema-decay",    type=float, default=0.999)
     p.add_argument("--grad-clip",    type=float, default=1.0)
 
     # Eval / logging

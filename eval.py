@@ -30,12 +30,13 @@ from train import DiffusionPolicyNet
 # --------------------------------------------------------------------------- #
 # Checkpoint loading
 # --------------------------------------------------------------------------- #
-def load_policy(ckpt_path: str, device: torch.device) -> tuple:
-    """Load a checkpoint and return (net, normalizer, hparams).
+def load_policy(ckpt_path: str, device: torch.device, use_ema: bool = True) -> tuple:
+    """Load a checkpoint and return (net, normalizer, obs_keys, hparams).
 
-    The returned net already has EMA weights applied (final.ckpt has them baked
-    in; best/last.ckpt carry the EMA state separately and this function applies
-    them before returning).
+    use_ema=True applies the EMA shadow weights. Only useful when the model was
+    trained for many steps (100k+). With short training runs (<10k steps) the
+    EMA shadow is dominated by initial random weights (decay^N stays near 1.0),
+    so use_ema=False (raw model_state) typically performs better.
     """
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     hp   = ckpt["hparams"]
@@ -52,12 +53,22 @@ def load_policy(ckpt_path: str, device: torch.device) -> tuple:
 
     net.load_state_dict(ckpt["model_state"])
 
-    # Apply EMA weights if present (best.ckpt / last.ckpt carry them separately)
-    if "ema" in ckpt and ckpt["ema"] is not None:
-        for k, p in net.named_parameters():
-            if k in ckpt["ema"]["shadow"]:
-                p.data.copy_(ckpt["ema"]["shadow"][k].to(p.dtype))
-        print("EMA weights applied.")
+    if use_ema and "ema" in ckpt and ckpt["ema"] is not None:
+        N = ckpt.get("global_step", 0)
+        decay = ckpt["ema"]["decay"]
+        initial_frac = decay ** N
+        if initial_frac > 0.5:
+            print(f"WARNING: EMA shadow is {initial_frac*100:.0f}% initial random weights "
+                  f"(decay={decay}, steps={N}). Using raw model weights instead.")
+            use_ema = False
+        else:
+            for k, p in net.named_parameters():
+                if k in ckpt["ema"]["shadow"]:
+                    p.data.copy_(ckpt["ema"]["shadow"][k].to(p.dtype))
+            print(f"EMA weights applied ({(1-initial_frac)*100:.0f}% trained).")
+
+    if not use_ema:
+        print("Using raw model weights (no EMA).")
 
     net.eval()
     normalizer = Normalizer.from_state_dict(ckpt["normalizer"])
