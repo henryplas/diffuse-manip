@@ -16,3 +16,7 @@ wandb/
 # Editor
 .vscode/
 .idea/
+
+# Repo meta
+CLAUDE.md
+DiffuseManip-roadmap.md
