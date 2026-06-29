@@ -182,7 +182,8 @@ def run_rollout(
             step_idx += 1
 
             if save_frames:
-                frames.append(env.render(mode="rgb_array", camera_name="agentview"))
+                # robosuite 1.5: camera frames are in the obs dict, not env.render()
+                frames.append(raw_obs["agentview_image"])
 
             # robosuite 1.5 puts nothing in info — check success via reward or
             # _check_success() directly (sparse reward = 1.0 on success).
