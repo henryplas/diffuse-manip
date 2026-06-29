@@ -37,7 +37,7 @@ def load_policy(ckpt_path: str, device: torch.device) -> tuple:
     in; best/last.ckpt carry the EMA state separately and this function applies
     them before returning).
     """
-    ckpt = torch.load(ckpt_path, map_location=device)
+    ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     hp   = ckpt["hparams"]
 
     net = DiffusionPolicyNet(
@@ -102,6 +102,10 @@ def extract_obs(env_obs: dict, obs_keys: tuple) -> np.ndarray:
 
     robosuite uses "object-state" for the concatenated object observations;
     robomimic stores this under the key "object" in the HDF5. We map here.
+
+    Version mismatch fix: robomimic v141 (collected with robosuite 1.4.1) stores
+    dims 7-9 of `object` as `eef_pos - cube_pos`, but robosuite 1.5 returns
+    `cube_pos - eef_pos` in `object-state`. Negate dims 7-9 to match training.
     """
     KEY_MAP = {"object": "object-state"}
     parts = []
@@ -112,7 +116,11 @@ def extract_obs(env_obs: dict, obs_keys: tuple) -> np.ndarray:
                 f"Obs key '{env_key}' not found in env obs.\n"
                 f"Available keys: {list(env_obs.keys())}"
             )
-        parts.append(env_obs[env_key].flatten().astype(np.float32))
+        val = env_obs[env_key].flatten().astype(np.float32)
+        if env_key == "object-state" and val.shape[0] == 10:
+            val = val.copy()
+            val[7:10] = -val[7:10]
+        parts.append(val)
     return np.concatenate(parts)
 
 
@@ -158,15 +166,19 @@ def run_rollout(
         for a in actions[:action_horizon]:
             if done:
                 break
-            raw_obs, _, done, info = env.step(a)
+            raw_obs, reward, done, info = env.step(a)
             obs_buf.append(extract_obs(raw_obs, obs_keys))
             step_idx += 1
 
             if save_frames:
                 frames.append(env.render(mode="rgb_array", camera_name="agentview"))
 
-            if done:
-                success = bool(info.get("success", False))
+            # robosuite 1.5 puts nothing in info — check success via reward or
+            # _check_success() directly (sparse reward = 1.0 on success).
+            if reward > 0 or info.get("success", False) or env._check_success():
+                success = True
+                done = True
+                break
 
     return success, step_idx, frames
 
