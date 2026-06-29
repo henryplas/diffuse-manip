@@ -1,0 +1,18 @@
+# datasets (HDF5 files are large — download separately)
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.env
+
+# Training artefacts
+runs/
+wandb/
+
+# Editor
+.vscode/
+.idea/
