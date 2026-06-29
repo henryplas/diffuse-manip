@@ -71,7 +71,6 @@ def make_env(task: str, seed: int = 0, render_offscreen: bool = False):
     """Create a robosuite environment matching the training data setup."""
     try:
         import robosuite as suite
-        from robosuite.controllers import load_controller_config
     except ImportError:
         raise ImportError(
             "robosuite is not installed.\n"
@@ -91,7 +90,6 @@ def make_env(task: str, seed: int = 0, render_offscreen: bool = False):
         use_object_obs        = True,
         reward_shaping        = False,
         control_freq          = 20,
-        controller_configs    = load_controller_config(default_controller="OSC_POSE"),
         ignore_done           = False,
         horizon               = 500,
         seed                  = seed,
