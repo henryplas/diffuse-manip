@@ -264,17 +264,10 @@ def evaluate(args: argparse.Namespace) -> dict:
 
 
 def _save_gif(frames: list, path: Path, fps: int = 10) -> None:
-    try:
-        import imageio
-        imageio.mimsave(str(path), frames, fps=fps)
-    except ImportError:
-        try:
-            from PIL import Image
-            imgs = [Image.fromarray(f) for f in frames]
-            imgs[0].save(str(path), save_all=True, append_images=imgs[1:],
-                         duration=1000 // fps, loop=0)
-        except ImportError:
-            print(f"  (skipping GIF save — install imageio or Pillow)")
+    from PIL import Image
+    imgs = [Image.fromarray(f) for f in frames]
+    imgs[0].save(str(path), save_all=True, append_images=imgs[1:],
+                 duration=1000 // fps, loop=0)  # loop=0 = infinite
 
 
 # --------------------------------------------------------------------------- #
