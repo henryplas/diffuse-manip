@@ -216,7 +216,7 @@ def train(args: argparse.Namespace) -> Path:
     best_val_loss = float("inf")
     global_step = 0
     if args.resume:
-        ckpt = torch.load(args.resume, map_location=device)
+        ckpt = torch.load(args.resume, map_location=device, weights_only=False)
         net.load_state_dict(ckpt["model_state"])
         ema.load_state_dict(ckpt["ema"])
         opt.load_state_dict(ckpt["optimizer_state"])
