@@ -17,6 +17,8 @@ wandb/
 .vscode/
 .idea/
 
-# Repo meta
-CLAUDE.md
-DiffuseManip-roadmap.md
+# Claude Code internal files
+.claude/
+
+# Eval results and GIFs (large; regenerate with eval.py)
+results/
